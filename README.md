@@ -47,7 +47,13 @@ def _cursor():
 query = QueryBuilder(_cursor())
 
 # Build and execute a query
-res = query.select("*").table("users").execute()
+res = (
+    query.select("*")
+    .table("users")
+    .equal("id", "uuid")
+    .equal("email", "test@gmail.com")
+    .execute()
+)
 
 # Print the result
 print(res)
