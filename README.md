@@ -1,6 +1,6 @@
 # QueryBuilder for Psycopg2
 
-QueryBuilder is a lightweight Python package designed to simplify building SQL queries when using the Psycopg2 library to interact with PostgreSQL databases. Inspired by the design and functionality of Supabase's client SDKs, QueryBuilder aims to provide an intuitive and fluid API for constructing and executing SQL queries.
+QueryBuilder is a lightweight Python package designed to simplify building SQL queries when using the Psycopg2 library to interact with PostgreSQL databases. Inspired by [Supabase's client SDKs](https://supabase.com/), QueryBuilder aims to provide an intuitive and fluid API for constructing and executing SQL queries.
 
 ## Features
 
