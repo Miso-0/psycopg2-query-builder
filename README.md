@@ -14,7 +14,7 @@ QueryBuilder is a lightweight Python package designed to simplify building SQL q
 You can install QueryBuilder using pip:
 
 ```bash
-pip install querybuilder
+pip install psycopg2-query-builder
 ```
 
 ## Usage
