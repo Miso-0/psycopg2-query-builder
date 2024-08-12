@@ -68,7 +68,6 @@ print(res)
 
 ### Explanation:
 
-- **Environment Configuration:** The `dotenv_values` function is used to load environment variables from a `.env` file, which includes database connection details.
 - **Database Connection:** A connection to the PostgreSQL database is established using Psycopg2.
 - **Cursor Function:** The `_cursor()` function returns a new database cursor, which is passed to the `QueryBuilder`.
 - **Query Construction:** The `select()` method specifies the columns to be retrieved (`*` means all columns), and the `table()` method specifies the table to query (`users`).
