@@ -39,12 +39,10 @@ database_connection = psycopg2.connect(
 )
 
 # Function to get a database cursor
-def _cursor():
-    db_curser = database_connection.cursor()
-    return db_curser
+db_curser = database_connection.cursor()
 
 # Create a QueryBuilder instance
-query = QueryBuilder(_cursor())
+query = QueryBuilder(db_curser)
 
 # Build and execute a query
 res = (
@@ -56,6 +54,15 @@ res = (
 )
 
 # Print the result
+print(res)
+
+res = (
+    query.select(["id","email","hashed_password"])
+    .table("users")
+    .equal("id", "uuid")
+    .execute()
+)
+
 print(res)
 ```
 
