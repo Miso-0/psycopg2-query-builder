@@ -1,6 +1,8 @@
 # QueryBuilder for Psycopg2
 
-QueryBuilder is a lightweight Python package designed to simplify building SQL queries when using the Psycopg2 library to interact with PostgreSQL databases. Inspired by [Supabase's client SDKs](https://supabase.com/), QueryBuilder aims to provide an intuitive and fluid API for constructing and executing SQL queries.
+QueryBuilder is a lightweight Python package designed to simplify building SQL queries when using the Psycopg2 library
+to interact with PostgreSQL databases. Inspired by [Supabase's client SDKs](https://supabase.com/), QueryBuilder aims to
+provide an intuitive and fluid API for constructing and executing SQL queries.
 
 ## Features
 
@@ -47,7 +49,6 @@ query = QueryBuilder(db_curser)
 # Build and execute a query
 res = (
     query.select("*")
-    .table("users")
     .equal("id", "uuid")
     .equal("email", "test@gmail.com")
     .execute()
@@ -57,8 +58,7 @@ res = (
 print(res)
 
 res = (
-    query.select(["id","email","hashed_password"])
-    .table("users")
+    query.select(["id", "email", "hashed_password"])
     .equal("id", "uuid")
     .execute()
 )
@@ -70,7 +70,8 @@ print(res)
 
 - **Database Connection:** A connection to the PostgreSQL database is established using Psycopg2.
 - **Cursor Function:** The `_cursor()` function returns a new database cursor, which is passed to the `QueryBuilder`.
-- **Query Construction:** The `select()` method specifies the columns to be retrieved (`*` means all columns), and the `table()` method specifies the table to query (`users`).
+- **Query Construction:** The `select()` method specifies the columns to be retrieved (`*` means all columns), and
+  the `table()` method specifies the table to query (`users`).
 - **Query Execution:** The `execute()` method runs the query and returns the results as a list of dictionaries.
 
 ## License

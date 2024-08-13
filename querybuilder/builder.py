@@ -1,4 +1,4 @@
-from typing import Union
+from typing import Union, Optional
 from querybuilder.builder_errors import QueryErrors
 
 
@@ -12,6 +12,7 @@ class QueryBuilder:
         """
         self._query = ""
         self._table = ""
+        self._schema = ""
         self._cursor = cursor
         self._specified_columns = []
         self._where_called = False
@@ -19,6 +20,7 @@ class QueryBuilder:
         self._select_called = False
         self._join_called = False
         self._on_called = False
+        self._rpc_called = False
 
     def __eq__(self, other):
         if isinstance(other, QueryBuilder):
@@ -34,6 +36,10 @@ class QueryBuilder:
 
         Args:
             columns: A list of column names or a string '*' to select all columns.
+                    =============================================================================================
+                    NOTE: make sure that the columns list is ordered the same as expected columns to be returned
+                          from the sql query otherwise the resulting keys and values will be mismatched
+                    =============================================================================================
 
         Returns:
             QueryBuilder: The current instance to allow method chaining.
@@ -49,7 +55,7 @@ class QueryBuilder:
             self._query = f"SELECT {', '.join(self._specified_columns)} FROM"  # Select specified columns
         return self
 
-    def table(self, table: str) -> "QueryBuilder":
+    def table(self, table: str, schema: Optional[str] = "public") -> "QueryBuilder":
         """
         Specifies the table to query.
 
@@ -58,14 +64,32 @@ class QueryBuilder:
 
         Returns:
             QueryBuilder: The current instance to allow method chaining.
+            :param table:
+            :param schema:
         """
         if not self._select_called:
             raise QueryErrors("`table` method must be called after `select`.")
         if self._table_called:
             raise QueryErrors("`table` has already been called.")
+
         self._table = table
+        self._schema = schema
+        self._query += f" {schema}.{table}"
         self._table_called = True
-        self._query += f" {table}"  # Append table name to the query
+
+        return self
+
+    def rpc(self, function: str, params: Optional[list], schema: Optional[str] = "public") -> "QueryBuilder":
+        if len(self._specified_columns) == 0:
+            raise QueryErrors("Specify the expected return columns on 'select' when using 'rpc'")
+
+        self._query += f" {schema}.{function}"
+        self._table_called = True
+        if params is not None:
+            self._query += "("
+            for p in params:
+                self._query += f"{p}"
+            self._query += ")"
         return self
 
     def equal(self, column: str, value) -> "QueryBuilder":
