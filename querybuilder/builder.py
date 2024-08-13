@@ -1,3 +1,7 @@
+from typing import Union, Optional
+from querybuilder.builder_errors import QueryErrors
+
+
 class QueryBuilder:
     def __init__(self, cursor):
         """
@@ -6,25 +10,42 @@ class QueryBuilder:
         Args:
             cursor: A database cursor to execute SQL queries.
         """
-        self._query = ""  # Stores the SQL query being constructed
-        self._specified_columns = []  # List of specified columns for SELECT statement
-        self._select_called = False  # Tracks if the `select` method has been called
-        self._table_called = False  # Tracks if the `table` method has been called
-        self._where_called = False  # Tracks if the `equal` method (WHERE clause) has been called
-        self._cursor = cursor  # Database cursor for executing the query
+        self._query = ""
+        self._table = ""
+        self._schema = ""
+        self._cursor = cursor
+        self._specified_columns = []
+        self._where_called = False
+        self._table_called = False
+        self._select_called = False
+        self._join_called = False
+        self._on_called = False
+        self._rpc_called = False
 
-    def select(self, columns: list[str] | str = "*") -> "QueryBuilder":
+    def __eq__(self, other):
+        if isinstance(other, QueryBuilder):
+            return self._query == other._query
+        return False
+
+    def __str__(self) -> str:
+        return self._query
+
+    def select(self, columns: Union[list[str], str] = "*") -> "QueryBuilder":
         """
         Specifies the columns to select in the SQL query.
 
         Args:
             columns: A list of column names or a string '*' to select all columns.
+                    =============================================================================================
+                    NOTE: make sure that the columns list is ordered the same as expected columns to be returned
+                          from the sql query otherwise the resulting keys and values will be mismatched
+                    =============================================================================================
 
         Returns:
             QueryBuilder: The current instance to allow method chaining.
         """
         if self._select_called:
-            raise ValueError("`select` has already been called.")
+            raise QueryErrors("`select` has already been called.")
         self._select_called = True
 
         if columns == "*":
@@ -34,7 +55,7 @@ class QueryBuilder:
             self._query = f"SELECT {', '.join(self._specified_columns)} FROM"  # Select specified columns
         return self
 
-    def table(self, table: str) -> "QueryBuilder":
+    def table(self, table: str, schema: Optional[str] = "public") -> "QueryBuilder":
         """
         Specifies the table to query.
 
@@ -43,13 +64,32 @@ class QueryBuilder:
 
         Returns:
             QueryBuilder: The current instance to allow method chaining.
+            :param table:
+            :param schema:
         """
         if not self._select_called:
-            raise ValueError("`table` method must be called after `select`.")
+            raise QueryErrors("`table` method must be called after `select`.")
         if self._table_called:
-            raise ValueError("`table` has already been called.")
+            raise QueryErrors("`table` has already been called.")
+
+        self._table = table
+        self._schema = schema
+        self._query += f" {schema}.{table}"
         self._table_called = True
-        self._query += f" {table}"  # Append table name to the query
+
+        return self
+
+    def rpc(self, function: str, params: Optional[list], schema: Optional[str] = "public") -> "QueryBuilder":
+        if len(self._specified_columns) == 0:
+            raise QueryErrors("Specify the expected return columns on 'select' when using 'rpc'")
+
+        self._query += f" {schema}.{function}"
+        self._table_called = True
+        if params is not None:
+            self._query += "("
+            for p in params:
+                self._query += f"{p}"
+            self._query += ")"
         return self
 
     def equal(self, column: str, value) -> "QueryBuilder":
@@ -64,10 +104,32 @@ class QueryBuilder:
             QueryBuilder: The current instance to allow method chaining.
         """
         if not self._table_called:
-            raise ValueError("`equal` method must be called after `table`.")
+            raise QueryErrors("`equal` method must be called after `table`.")
         clause = f"{column}='{value}'"
-        self._query += f" {'AND' if self._where_called else 'WHERE'} {clause}"  # Add WHERE or AND clause
+        self._query += f" {'AND' if self._where_called else 'WHERE'} {clause}"
         self._where_called = True
+        return self
+
+    def join(self, table: str) -> "QueryBuilder":
+        if not self._table_called:
+            raise QueryErrors("`equal` method must be called after `table`.")
+        if self._where_called:
+            raise QueryErrors("`where` should be called after all the `join` and `on` methods are called")
+
+        self._join_called = True
+        self._query += f" JOIN {table}"
+        return self
+
+    def on(self, column: str, value) -> "QueryBuilder":
+        if not self._table_called:
+            raise QueryErrors("`equal` method must be called after `table`.")
+
+        if self._where_called:
+            raise QueryErrors("`where` should be called after all the `join` and `on` methods are called")
+
+        self._on_called = True
+
+        self._query += f" {'AND' if self._on_called else 'ON'} {column} = {value}"
         return self
 
     def execute(self) -> list[dict]:
@@ -78,18 +140,21 @@ class QueryBuilder:
             list[dict]: A list of dictionaries, where each dictionary represents a row in the result set.
 
         Raises:
-            ValueError: If the query is incomplete (i.e., `select` and `table` have not been called).
+            QueryErrors: If the query is incomplete (i.e., `select` and `table` have not been called).
         """
         if not (self._select_called and self._table_called):
-            raise ValueError("Incomplete query. Make sure `select` and `table` have been called.")
+            raise QueryErrors("Incomplete query. Make sure `select` and `table` have been called.")
 
-        self._cursor.execute(self._query)  # Execute the query
-        data = self._cursor.fetchall()  # Fetch all rows from the query result
-        if not data:
-            return []
+        try:
+            self._cursor.execute(self._query)
+            data = self._cursor.fetchall()
+            if not data:
+                return []
 
-        data_columns = self._specified_columns or self._get_table_columns()  # Determine columns to map
-        return self._map_columns_to_values(data_columns, data)  # Map columns to values and return result
+            data_columns = self._specified_columns or self._get_table_columns()
+            return self._map_columns_to_values(data_columns, data)
+        except Exception as e:
+            raise QueryErrors(e.__str__())
 
     def _get_table_columns(self) -> list[str]:
         """
@@ -98,8 +163,9 @@ class QueryBuilder:
         Returns:
             list[str]: A list of column names for the table.
         """
-        self._cursor.execute("SELECT column_name FROM information_schema.columns WHERE table_name = 'users'")
-        return [column[0] for column in self._cursor.fetchall()]  # Extract column names from the result set
+        self._cursor.execute("SELECT column_name FROM information_schema.columns WHERE table_name = %s;",
+                             (self._table,))
+        return [column[0] for column in self._cursor.fetchall()]
 
     @staticmethod
     def _map_columns_to_values(columns: list[str], values: list[tuple]) -> list[dict]:
@@ -113,4 +179,4 @@ class QueryBuilder:
         Returns:
             list[dict]: A list of dictionaries, where each dictionary maps column names to row values.
         """
-        return [{col: val for col, val in zip(columns, row)} for row in values]  # Map columns to values in each row
+        return [{col: val for col, val in zip(columns, row)} for row in values]
