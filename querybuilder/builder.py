@@ -1,5 +1,6 @@
-from typing import Union, Optional
+from typing import Union
 from querybuilder.builder_errors import QueryErrors
+from querybuilder import Table, Column, Function
 
 
 class QueryBuilder:
@@ -20,7 +21,7 @@ class QueryBuilder:
         self._select_called = False
         self._join_called = False
         self._on_called = False
-        self._rpc_called = False
+        self._function_called = False
 
     def __eq__(self, other):
         if isinstance(other, QueryBuilder):
@@ -30,7 +31,7 @@ class QueryBuilder:
     def __str__(self) -> str:
         return self._query
 
-    def select(self, columns: Union[list[str], str] = "*") -> "QueryBuilder":
+    def select(self, columns: Union[list[Column], str] = "*") -> "QueryBuilder":
         """
         Specifies the columns to select in the SQL query.
 
@@ -52,10 +53,10 @@ class QueryBuilder:
             self._query = "SELECT * FROM"  # Select all columns
         else:
             self._specified_columns = columns if isinstance(columns, list) else [columns]
-            self._query = f"SELECT {', '.join(self._specified_columns)} FROM"  # Select specified columns
+            self._query = f"SELECT {', '.join(self._specified_columns.__str__())} FROM"  # Select specified columns
         return self
 
-    def table(self, table: str, schema: Optional[str] = "public") -> "QueryBuilder":
+    def table(self, table: Table) -> "QueryBuilder":
         """
         Specifies the table to query.
 
@@ -65,7 +66,6 @@ class QueryBuilder:
         Returns:
             QueryBuilder: The current instance to allow method chaining.
             :param table:
-            :param schema:
         """
         if not self._select_called:
             raise QueryErrors("`table` method must be called after `select`.")
@@ -73,23 +73,18 @@ class QueryBuilder:
             raise QueryErrors("`table` has already been called.")
 
         self._table = table
-        self._schema = schema
-        self._query += f" {schema}.{table}"
+        self._query += f" {table.__str__()}"
         self._table_called = True
 
         return self
 
-    def rpc(self, function: str, params: Optional[list], schema: Optional[str] = "public") -> "QueryBuilder":
+    def function(self, function: Function) -> "QueryBuilder":
         if len(self._specified_columns) == 0:
-            raise QueryErrors("Specify the expected return columns on 'select' when using 'rpc'")
+            raise QueryErrors("Specify the expected return columns on 'select' when using 'function'")
 
-        self._query += f" {schema}.{function}"
+        self._query += f" {function.__str__()}"
         self._table_called = True
-        if params is not None:
-            self._query += "("
-            for p in params:
-                self._query += f"{p}"
-            self._query += ")"
+        self._function_called = True
         return self
 
     def equal(self, column: str, value) -> "QueryBuilder":
@@ -105,22 +100,12 @@ class QueryBuilder:
         """
         if not self._table_called:
             raise QueryErrors("`equal` method must be called after `table`.")
-        clause = f"{column}='{value}'"
+        clause = f"{column.__str__()}='{value}'"
         self._query += f" {'AND' if self._where_called else 'WHERE'} {clause}"
         self._where_called = True
         return self
 
-    def join(self, table: str) -> "QueryBuilder":
-        if not self._table_called:
-            raise QueryErrors("`equal` method must be called after `table`.")
-        if self._where_called:
-            raise QueryErrors("`where` should be called after all the `join` and `on` methods are called")
-
-        self._join_called = True
-        self._query += f" JOIN {table}"
-        return self
-
-    def on(self, column: str, value) -> "QueryBuilder":
+    def join_on(self, table: str, column1: str, column2: str) -> "QueryBuilder":
         if not self._table_called:
             raise QueryErrors("`equal` method must be called after `table`.")
 
@@ -129,7 +114,7 @@ class QueryBuilder:
 
         self._on_called = True
 
-        self._query += f" {'AND' if self._on_called else 'ON'} {column} = {value}"
+        self._query += f" JOIN {table} {'AND' if self._on_called else 'ON'} {self._table}.{column1} = {table}.{column2}"
         return self
 
     def execute(self) -> list[dict]:
