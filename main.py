@@ -1,5 +1,6 @@
-import psycopg2
 from querybuilder import QueryBuilder
+from querybuilder.types import Column, Table
+import psycopg2
 
 database_connection = psycopg2.connect(
     database='todo_app',
@@ -14,7 +15,8 @@ db_curser = database_connection.cursor()
 query = QueryBuilder(db_curser)
 
 res = (
-    query.select(["email"]).table(table="users").join("todos").on("user_id")
+    query.select(columns=[Column(name="title", alies="Name", table="settings")]).table(
+        table=Table(name="settings", schema="internal")).equal("id", 1).execute()
 )
 
 print(res)

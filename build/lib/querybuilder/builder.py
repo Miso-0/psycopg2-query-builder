@@ -1,6 +1,6 @@
 from typing import Union
-from querybuilder.types import Column, Table, Function
-from querybuilder.builder_errors import QueryErrors
+from utils.types import Column, Table, Function
+from utils.builder_errors import QueryErrors
 
 
 class QueryBuilder:
@@ -35,29 +35,23 @@ class QueryBuilder:
 
         Args:
             columns: A list of column names or a string '*' to select all columns.
-                     =============================================================================================
-                     NOTE: make sure that the columns list is ordered the same as expected columns to be returned
-                           from the sql query otherwise the resulting keys and values will be mismatched
-                     =============================================================================================
+                    =============================================================================================
+                    NOTE: make sure that the columns list is ordered the same as expected columns to be returned
+                          from the sql query otherwise the resulting keys and values will be mismatched
+                    =============================================================================================
 
         Returns:
             QueryBuilder: The current instance to allow method chaining.
         """
-
         if self._select_called:
             raise QueryErrors("`select` has already been called.")
         self._select_called = True
 
         if columns == "*":
-            self._query = "SELECT * FROM"
+            self._query = "SELECT * FROM"  # Select all columns
         else:
-            columns_str = [
-                c.alies_str() if c.alies is not None else str(c)
-                for c in columns
-            ]
-            self._specified_columns = [c.alies if c.alies is not None else c.name for c in columns]
-            self._query = f"SELECT {', '.join(columns_str)} FROM"
-
+            self._specified_columns = columns if isinstance(columns, list) else [columns]
+            self._query = f"SELECT {', '.join(self._specified_columns.__str__())} FROM"  # Select specified columns
         return self
 
     def table(self, table: Table) -> "QueryBuilder":
@@ -76,7 +70,7 @@ class QueryBuilder:
         if self._table_called:
             raise QueryErrors("`table` has already been called.")
 
-        self._table = table.name
+        self._table = table
         self._query += f" {table.__str__()}"
         self._table_called = True
 
@@ -121,6 +115,30 @@ class QueryBuilder:
         self._query += f" JOIN {table} {'AND' if self._on_called else 'ON'} {self._table}.{column1} = {table}.{column2}"
         return self
 
+    def execute(self) -> list[dict]:
+        """
+        Executes the constructed SQL query and returns the results.
+
+        Returns:
+            list[dict]: A list of dictionaries, where each dictionary represents a row in the result set.
+
+        Raises:
+            QueryErrors: If the query is incomplete (i.e., `select` and `table` have not been called).
+        """
+        if not (self._select_called and self._table_called):
+            raise QueryErrors("Incomplete query. Make sure `select` and `table` have been called.")
+
+        try:
+            self._cursor.execute(self._query)
+            data = self._cursor.fetchall()
+            if not data:
+                return []
+
+            data_columns = self._specified_columns or self._get_table_columns()
+            return self._map_columns_to_values(data_columns, data)
+        except Exception as e:
+            raise QueryErrors(e.__str__())
+
     def _get_table_columns(self) -> list[str]:
         """
         Retrieves the column names for the current table from the database.
@@ -145,28 +163,3 @@ class QueryBuilder:
             list[dict]: A list of dictionaries, where each dictionary maps column names to row values.
         """
         return [{col: val for col, val in zip(columns, row)} for row in values]
-
-    def execute(self) -> list[dict]:
-        """
-        Executes the constructed SQL query and returns the results.
-
-        Returns:
-            list[dict]: A list of dictionaries, where each dictionary represents a row in the result set.
-
-        Raises:
-            QueryErrors: If the query is incomplete (i.e., `select` and `table` have not been called).
-        """
-        if not (self._select_called and self._table_called):
-            raise QueryErrors("Incomplete query. Make sure `select` and `table` have been called.")
-
-        try:
-            self._cursor.execute(self._query)
-            data = self._cursor.fetchall()
-            if not data:
-                return []
-
-            data_columns = self._specified_columns or self._get_table_columns()
-
-            return self._map_columns_to_values(data_columns, data)
-        except Exception as e:
-            raise QueryErrors(e.__str__())
